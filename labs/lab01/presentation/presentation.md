@@ -54,7 +54,7 @@ header-includes:
 :::
 ::: {.column width="30%"}
 
-![](./image/avilin.jpg)
+![](./images/avilin.jpg)
 
 :::
 ::::::::::::::
