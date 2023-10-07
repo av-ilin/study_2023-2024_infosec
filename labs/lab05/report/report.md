@@ -72,7 +72,7 @@ header-includes:
 
 # Задачи
 
-1. Создать программу способную выводить gid, uid.
+1. Создать программу способную выводить gid, uid и провести ислледование SetUID-битов.
 
 2. Исследовать Sticky-бит.
 
@@ -207,6 +207,8 @@ chown root:guest readfile
 chmod u+s readfile
 exit
 ```
+
+![Подготовка к запуску `readfile`](images/03.png){#fig:003 width=86%}
 
 6. Проверим, может ли программа `readfile` прочитать файлы `readfile.c` и `/etc/shadow`. (рис. @fig:004, @fig:005)
 
