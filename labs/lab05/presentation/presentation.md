@@ -134,7 +134,6 @@ header-includes:
 :::
 ::: {.column width="50%"}
 ![Исследование Sticky (2)](images/08.png)
-
 :::
 ::::::::::::::
 
