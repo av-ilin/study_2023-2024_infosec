@@ -1,7 +1,7 @@
 ---
 ## Front matter
-title: "Лабораторная работа №4"
-subtitle: "Дискреционное разграничение прав в Linux. Расширенные атрибуты"
+title: "Лабораторная работа №5"
+subtitle: "Дискреционное разграничение прав в Linux. Исследование влияния дополнительных атрибутов"
 author: "Ильин Андрей Владимирович"
 
 ## Generic otions
@@ -68,13 +68,13 @@ header-includes:
 
 # Цель работы
 
-Получение практических навыков работы в консоли с расширенными атрибутами файлов. Закрепление теоретических основ дискреционного разграничения доступа в современных системах с открытым кодом на базе ОС Linux.
+Изучение механизмов изменения идентификаторов, применения SetUID- и Sticky-битов. Получение практических навыков работы в консоли с дополнительными атрибутами. Рассмотрение работы механизма смены идентификатора процессов пользователей, а также влияние бита Sticky на запись и удаление файлов.
 
 # Задачи
 
-1. Провести ряд операций над файлом с правами `600` и аттрибутом `a`.
+1. Создать программу способную выводить gid, uid.
 
-2. Провести ряд операций над файлом с правами `600` и аттрибутом `i`.
+2. Исследовать Sticky-бит.
 
 # Теоретическое введение
 
@@ -86,6 +86,8 @@ header-includes:
 
 - Расширенные атрибуты файловых объектов (далее - расширенные атрибуты) - поддерживаемая некоторыми файловыми системами возможность ассоциировать с файловыми объектами произвольные метаданные. [@attr]
 
+- Sticky Bit - в случае, если этот бит установлен для папки, то файлы в этой папке могут быть удалены только их владельцем. [@s-bit]
+
 ## Окружение
 
 - Rocky Linux - это корпоративная операционная система с открытым исходным кодом, разработанная таким образом, чтобы быть на 100% совместимой с Red Hat Enterprise Linux. Он находится в стадии интенсивной разработки сообществом. [@rocky-docs]
@@ -96,60 +98,180 @@ header-includes:
 
 # Выполнение лабораторной работы
 
-1. От имени пользователя `guest` определим расширенные атрибуты файла `file1` и установим на файл `file1` права, разрешающие чтение и запись для владельца файла. Попробуем установить расширенный атрибут `a`. (рис. @fig:001)
+## Создание программы
+
+1. Создадим, скомплилируем и запустим программу `simpleid.c`. Сравним c выводом команды `id`. (рис. @fig:001)
 
 ```bash
-# guest
-lsattr /home/guest/dir1/file1
-chmod 600 /home/guest/dir1/file1
-chattr +a /home/guest/dir1/file1
+gcc simpleid.c -o simpleid
+./simpleid
+id
 ```
 
-2. Установим расширенный атрибут `a` на файл `file1` от имени `суперпользователя`. От пользователя `guest`: проверим правильность установления атрибута; выполним дозапись слова «test»; убедимся, что слово "test" было успешно записано; попробуем стереть в нём информацию; попробуем установить права `000`. После этого снимем расширенный атрибут `a` с файла от имени `суперпользователя`. (рис. @fig:001)
+```c
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdio.h>
+
+int main () {
+    uid_t uid = geteuid();
+    gid_t gid = getegid();
+    printf ("uid=%d, gid=%d\n", uid, gid);
+    return 0;
+}
+```
+
+2. Создадим, скомплилируем и запустим программу `simpleid2.c` (усложненная версия `simpleid.c`). (рис. @fig:001)
 
 ```bash
-# root
-chattr +a /home/guest/dir1/file1
+gcc simpleid2.c -o simpleid2
+./simpleid2
+```
+
+```c
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdio.h>
+
+int main () {
+    uid_t real_uid = getuid();
+    uid_t e_uid = geteuid();
+    gid_t real_gid = getgid();
+    gid_t e_gid = getegid();
+    printf ("e_uid=%d, e_gid=%d\n", e_uid, e_gid);
+    printf ("real_uid=%d, real_gid=%d\n", real_uid, real_gid);
+    return 0;
+}
+```
+
+![Запуск `simpleid.c` и `simpleid2.c`](images/01.png){#fig:001 width=86%}
+
+3. От имени суперпользователя сменим пользователя и изменим аттрибуты на `simpleid2`. Выполним проверку правильности установки новых атрибутов и смены владельца файла `simpleid2`. После чего запустим `simpleid2` (от имени `guest`) (рис. @fig:002)
+
+```bash
+su
+chown root:guest /home/guest/simpleid2
+chmod u+s /home/guest/simpleid2
+exit
+ls -l simpleid2
+./simpleid2
+```
+
+4. От имени суперпользователя устаном SetGID-бит на `simpleid2`. Выполним проверку правильности установки новых атрибутов файла `simpleid2`. После чего запустим `simpleid2` (от имени `guest`) (рис. @fig:002)
+
+```bash
+su
+chmod u-s /home/guest/simpleid2
+chmod g+s /home/guest/simpleid2
+exit
+ls -l simpleid2
+./simpleid2
+```
+
+![Запуск `simpleid2.c` с измененным владельцем и аттрибутами](images/02.png){#fig:002 width=86%}
+
+5. Создим программу `readfile.c`. Откомпилируем ее. Сменим владельца у файла `readfile.c` и изменим права так, чтобы только суперпользователь (root) мог прочитать его. Проверим, что пользователь `guest` не может прочитать файл `readfile.c`. После этого сменим у программы `readfile` владельца и установим SetUID-бит. (рис. @fig:003)
+
+```c
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+int main (int argc, char* argv[]) {
+    unsigned char buffer[16];
+    size_t bytes_read;
+    int i;
+    int fd = open (argv[1], O_RDONLY);
+
+    do {
+        bytes_read = read(fd, buffer, sizeof (buffer));
+        for (i = 0; i < bytes_read; ++i) printf("%c", buffer[i]);
+    }
+
+    while (bytes_read == sizeof (buffer));
+    close(fd);
+    return 0;
+}
 ```
 
 ```bash
-# guest
-lsattr /home/guest/dir1/file1
-echo "test" >> /home/guest/dir1/file1
-cat /home/guest/dir1/file1
-echo "abcd" > /home/guest/dirl/file1
-chmod 000 file1
+su
+chown root:guest readfile.c
+chmod 700 readfile.c
+exit
+cat readfile.c
+su
+chown root:guest readfile
+chmod u+s readfile
+exit
 ```
+
+6. Проверим, может ли программа `readfile` прочитать файлы `readfile.c` и `/etc/shadow`. (рис. @fig:004, @fig:005)
 
 ```bash
-# root
-chattr -a /home/guest/dir1/file1
+./readfile readfile.c
 ```
 
-![Исследование аттрибута `a`](images/01.png){#fig:001 width=86%}
-
-3. Установим расширенный атрибут `i` на файл `file1` от имени `суперпользователя`. От пользователя `guest`: проверим правильность установления атрибута; выполним дозапись слова «test»; посмотрим записано ли слово "test" второй раз; попробуем стереть в нём информацию; попробуем установить права `000`. После этого снимем расширенный атрибут `i` с файла от имени `суперпользователя`. (рис. @fig:002)
+![Запуск `readfile` (`readfile.c`)](images/04.png){#fig:004 width=86%}
 
 ```bash
-# root
-chattr +i /home/guest/dir1/file1
+./readfile /etc/shadow
 ```
+
+![Запуск `readfile` (`/etc/shadow`)](images/05.png){#fig:005 width=86%}
+
+## Исследование Sticky-бита
+
+1. Выясним, установлен ли атрибут Sticky на директории `/tmp`. От имени пользователя guest создадим файл `file01.txt` в директории `/tmp` со словом `test`. Просмотрим атрибуты у только что созданного файла и разрешим чтение и запись для категории пользователей «все остальные». (рис. @fig:006)
 
 ```bash
-# guest
-lsattr /home/guest/dir1/file1
-echo "test" >> /home/guest/dir1/file1
-cat /home/guest/dir1/file1
-echo "abcd" > /home/guest/dirl/file1
-chmod 000 file1
+ls -l / | grep tmp
+echo "test" > /tmp/file01.txt
+ls -l /tmp/file01.txt
+chmod o+rw /tmp/file01.txt
+ls -l /tmp/file01.txt
 ```
+
+![Атрибут Sticky](images/06.png){#fig:006 width=86%}
+
+2. От имени пользователя `guest2` проведем исследование атрибута Sticky. (рис. @fig:007)
 
 ```bash
-# root
-chattr -i /home/guest/dir1/file1
+cat /tmp/file01.txt
+echo "test2" >> /tmp/file01.txt
+cat /tmp/file01.txt
+echo "test3" > /tmp/file01.txt
+cat /tmp/file01.txt
+rm /tmp/fileOl.txt
 ```
 
-![Исследование аттрибута `i`](images/02.png){#fig:002 width=86%}
+![Исследование Sticky (1)](images/07.png){#fig:007 width=86%}
+
+3. Удалим атрибут Sticky на директории `/tmp` и повторим действия из предыдущего пункта. После вернем атрибут. (рис. @fig:008)
+
+```bash
+su -
+chmod -t /tmp
+cat /tmp/file01.txt
+exit
+ls -l / | grep tmp
+
+echo "test2" >> /tmp/file01.txt
+cat /tmp/file01.txt
+echo "test3" > /tmp/file01.txt
+cat /tmp/file01.txt
+rm /tmp/fileOl.txt
+
+su -
+chmod +t /tmp
+cat /tmp/file01.txt
+exit
+ls -l / | grep tmp
+```
+
+![Исследование Sticky (2)](images/08.png){#fig:008 width=86%}
 
 # Анализ результатов
 
@@ -157,7 +279,7 @@ chattr -i /home/guest/dir1/file1
 
 # Выводы
 
-В результате выполнения работы мы повысили свои навыки использования интерфейса командой строки (CLI), познакомились на примерах с тем, как используются основные и расширенные атрибуты при разграничении доступа. Опробовали действие на практике расширенных атрибутов «а» и «i».
+Изучены идентификаторы SetUID-биты и Sticky-биты. Опробовали их действие на практике. Изучили влияние бита Sticky. Повысили свои навыки использования интерфейса командой строки (CLI).
 
 # Список литературы{.unnumbered}
 
