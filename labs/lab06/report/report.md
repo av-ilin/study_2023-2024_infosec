@@ -211,7 +211,7 @@ chcon -t httpd_sys_content_t /var/www/html/test.html
 lynx http://127.0.0.1/test.html
 ```
 
-![Добавление порта 81 в список портов](images/14.png){#fig:012 width=86%}
+![Добавление порта 81 в список портов](images/14.png){#fig:014 width=86%}
 
 ![Просмотр http://127.0.0.1/test.html (3)](images/15.png){#fig:015 width=86%}
 
