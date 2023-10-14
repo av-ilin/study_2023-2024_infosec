@@ -1,7 +1,7 @@
 ---
 ## Front matter
-title: "Лабораторная работа №5"
-subtitle: "Дискреционное разграничение прав в Linux. Исследование влияния дополнительных атрибутов"
+title: "Лабораторная работа №6"
+subtitle: "Мандатное разграничение прав в Linux"
 author: "Ильин Андрей Владимирович"
 
 ## Generic otions
@@ -68,13 +68,13 @@ header-includes:
 
 # Цель работы
 
-Изучение механизмов изменения идентификаторов, применения SetUID- и Sticky-битов. Получение практических навыков работы в консоли с дополнительными атрибутами. Рассмотрение работы механизма смены идентификатора процессов пользователей, а также влияние бита Sticky на запись и удаление файлов.
+Развить навыки администрирования ОС Linux. Получить первое практическое знакомство с технологией SELinux. Проверить работу SELinx на практике совместно с веб-сервером Apache.
 
 # Задачи
 
-1. Создать программу способную выводить gid, uid и провести ислледование SetUID-битов.
+1. Настроить и запустить сервер Apache.
 
-2. Исследовать Sticky-бит.
+2. Исследовать влияние различных параметров на работу сервера.
 
 # Теоретическое введение
 
@@ -86,7 +86,7 @@ header-includes:
 
 - Расширенные атрибуты файловых объектов (далее - расширенные атрибуты) - поддерживаемая некоторыми файловыми системами возможность ассоциировать с файловыми объектами произвольные метаданные. [@attr]
 
-- Sticky Bit - в случае, если этот бит установлен для папки, то файлы в этой папке могут быть удалены только их владельцем. [@s-bit]
+- Security Enhanced Linux (SELinux) – это система контроля доступа, которая в настоящее время встраиватся в большинство Linux-дистрибутивов. [@selinux]
 
 ## Окружение
 
@@ -98,182 +98,122 @@ header-includes:
 
 # Выполнение лабораторной работы
 
-## Создание программы
-
-1. Создадим, скомплилируем и запустим программу `simpleid.c`. Сравним c выводом команды `id`. (рис. @fig:001)
+1. Убедимся, что SELinux работает в режиме `enforcing` политики `targeted`. (рис. @fig:001)
 
 ```bash
-gcc simpleid.c -o simpleid
-./simpleid
-id
+getenforce
+sestatus
 ```
 
-```c
-#include <sys/types.h>
-#include <unistd.h>
-#include <stdio.h>
+![Проверка SELinux](images/01.png){#fig:001 width=86%}
 
-int main () {
-    uid_t uid = geteuid();
-    gid_t gid = getegid();
-    printf ("uid=%d, gid=%d\n", uid, gid);
-    return 0;
-}
-```
-
-2. Создадим, скомплилируем и запустим программу `simpleid2.c` (усложненная версия `simpleid.c`). (рис. @fig:001)
+2. Запустим веб-сервер. Убедимся, что он работает. (рис. @fig:002)
 
 ```bash
-gcc simpleid2.c -o simpleid2
-./simpleid2
+service httpd start
+service httpd status
 ```
 
-```c
-#include <sys/types.h>
-#include <unistd.h>
-#include <stdio.h>
+![Статус веб-сервера](images/02.png){#fig:002 width=86%}
 
-int main () {
-    uid_t real_uid = getuid();
-    uid_t e_uid = geteuid();
-    gid_t real_gid = getgid();
-    gid_t e_gid = getegid();
-    printf ("e_uid=%d, e_gid=%d\n", e_uid, e_gid);
-    printf ("real_uid=%d, real_gid=%d\n", real_uid, real_gid);
-    return 0;
-}
-```
-
-![Запуск `simpleid.c` и `simpleid2.c`](images/01.png){#fig:001 width=86%}
-
-3. От имени суперпользователя сменим пользователя и изменим аттрибуты на `simpleid2`. Выполним проверку правильности установки новых атрибутов и смены владельца файла `simpleid2`. После чего запустим `simpleid2` (от имени `guest`) (рис. @fig:002)
+3. Найдем веб-сервер Apache в списке процессов, определим его контекст безопасности. (рис. @fig:003)
 
 ```bash
-su
-chown root:guest /home/guest/simpleid2
-chmod u+s /home/guest/simpleid2
-exit
-ls -l simpleid2
-./simpleid2
+ps auxZ | grep httpd
 ```
 
-4. От имени суперпользователя устаном SetGID-бит на `simpleid2`. Выполним проверку правильности установки новых атрибутов файла `simpleid2`. После чего запустим `simpleid2` (от имени `guest`) (рис. @fig:002)
+![Контекст безопасности Apache](images/03.png){#fig:003 width=86%}
+
+4. Посмотрим текущее состояние переключателей SELinux для Apache. (рис. @fig:004)
 
 ```bash
-su
-chmod u-s /home/guest/simpleid2
-chmod g+s /home/guest/simpleid2
-exit
-ls -l simpleid2
-./simpleid2
+sestatus -b | grep httpd
 ```
 
-![Запуск `simpleid2.c` с измененным владельцем и аттрибутами](images/02.png){#fig:002 width=86%}
+![Переключатели SELinux для Apache](images/04.png){#fig:004 width=86%}
 
-5. Создим программу `readfile.c`. Откомпилируем ее. Сменим владельца у файла `readfile.c` и изменим права так, чтобы только суперпользователь (root) мог прочитать его. Проверим, что пользователь `guest` не может прочитать файл `readfile.c`. После этого сменим у программы `readfile` владельца и установим SetUID-бит. (рис. @fig:003)
+5. Посмотрим статистику по политике. (рис. @fig:005)
 
-```c
-#include <fcntl.h>
-#include <stdio.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
+```bash
+seinfo
+```
 
-int main (int argc, char* argv[]) {
-    unsigned char buffer[16];
-    size_t bytes_read;
-    int i;
-    int fd = open (argv[1], O_RDONLY);
+![Статистика по политике](images/05.png){#fig:005 width=86%}
 
-    do {
-        bytes_read = read(fd, buffer, sizeof (buffer));
-        for (i = 0; i < bytes_read; ++i) printf("%c", buffer[i]);
-    }
+6. Определиv тип файлов и поддиректорий, находящихся в директориях `/var/www`, `/var/www/html`. Определиv круг пользователей, которым разрешено создание файлов в директории `/var/www/html`. (рис. @fig:006)
 
-    while (bytes_read == sizeof (buffer));
-    close(fd);
-    return 0;
-}
+```bash
+ls -lZ /var/www
+ls -lZ /var/www/html
+ls -alF /var/www
+```
+
+![Тип файлов и поддиректорий Apache](images/06.png){#fig:006 width=86%}
+
+7. Создаlbv от имени суперпользователя html-файл в /var/www/html/test.html. Проверим контекст созданного файла. Обратимся к файлу через веб-сервер. (рис. @fig:007, @fig:008)
+
+```html
+<html>
+  <body>
+    test
+  </body>
+</html>
 ```
 
 ```bash
-su
-chown root:guest readfile.c
-chmod 700 readfile.c
-exit
-cat readfile.c
-su
-chown root:guest readfile
-chmod u+s readfile
-exit
+touch /var/www/html/test.html
+vim /var/www/html/test.html
+ls -Z /var/www/html/test.html
+lynx http://127.0.0.1/test.html
 ```
 
-![Подготовка к запуску `readfile`](images/03.png){#fig:003 width=86%}
+![Создание html.test](images/07.png){#fig:007 width=86%}
 
-6. Проверим, может ли программа `readfile` прочитать файлы `readfile.c` и `/etc/shadow`. (рис. @fig:004, @fig:005)
+![Просмотр http://127.0.0.1/test.html (1)](images/08.png){#fig:008 width=86%}
+
+8. Изменим контекст файла `/var/www/html/test.html` с `httpd_sys_content_t` на любой другой, к которому процесс httpd не должен иметь доступа, например, на `samba_share_t`. Попробуем ещё раз получить доступ к файлу через веб-сервер. Просмотрим log-файлы веб-сервера Apache. (рис. @fig:009, @fig:010, @fig:011)
 
 ```bash
-./readfile readfile.c
+chcon -t samba_share_t /var/www/html/test.html
+ls -Z /var/www/html/test.html
+lynx http://127.0.0.1/test.html
+tail /var/log/audit/audit.log
 ```
 
-![Запуск `readfile` (`readfile.c`)](images/04.png){#fig:004 width=86%}
+![Изменение контекст файла test.html](images/09.png){#fig:009 width=86%}
+
+![Просмотр http://127.0.0.1/test.html (2)](images/10.png){#fig:010 width=86%}
+
+![Просмотр audit.log](images/11.png){#fig:011 width=86%}
+
+9. Попробуйте запустить веб-сервер Apache на прослушивание ТСР-порта 81. Перезапустим веб-сервер Apache. (рис. @fig:012, @fig:013)
 
 ```bash
-./readfile /etc/shadow
+vim /etc/httpd/conf/httpd.conf
+service httpd restart
+service httpd status
 ```
 
-![Запуск `readfile` (`/etc/shadow`)](images/05.png){#fig:005 width=86%}
+![Изменение httpd.conf на прослушование ТСР-порта 81](images/12.png){#fig:012 width=86%}
 
-## Исследование Sticky-бита
+![Перезапуск Apache](images/13.png){#fig:013 width=86%}
 
-1. Выясним, установлен ли атрибут Sticky на директории `/tmp`. От имени пользователя guest создадим файл `file01.txt` в директории `/tmp` со словом `test`. Просмотрим атрибуты у только что созданного файла и разрешим чтение и запись для категории пользователей «все остальные». (рис. @fig:006)
+10. Проанализируем лог-файлы. Добавим порт 81 в список портов. (данный порт, как оказалось, уже был в списке, из-за этого не произошло сбоя). Перезапустим сервер. Вернем контекст `httpd_sys_cоntent__t`. Попробуем получить доступ к файлу через веб-сервер (рис. @fig:014, @fig:015)
 
 ```bash
-ls -l / | grep tmp
-echo "test" > /tmp/file01.txt
-ls -l /tmp/file01.txt
-chmod o+rw /tmp/file01.txt
-ls -l /tmp/file01.txt
+tail -n5 /var/log/messages
+
+semanage port -a -t http_port_t -р tcp 81
+semanage port -l | grep http_port_t
+service httpd restart
+
+chcon -t httpd_sys_content_t /var/www/html/test.html
+lynx http://127.0.0.1/test.html
 ```
 
-![Атрибут Sticky](images/06.png){#fig:006 width=86%}
+![Добавление порта 81 в список портов](images/14.png){#fig:012 width=86%}
 
-2. От имени пользователя `guest2` проведем исследование атрибута Sticky. (рис. @fig:007)
-
-```bash
-cat /tmp/file01.txt
-echo "test2" >> /tmp/file01.txt
-cat /tmp/file01.txt
-echo "test3" > /tmp/file01.txt
-cat /tmp/file01.txt
-rm /tmp/fileOl.txt
-```
-
-![Исследование Sticky (1)](images/07.png){#fig:007 width=86%}
-
-3. Удалим атрибут Sticky на директории `/tmp` и повторим действия из предыдущего пункта. После вернем атрибут. (рис. @fig:008)
-
-```bash
-su -
-chmod -t /tmp
-cat /tmp/file01.txt
-exit
-ls -l / | grep tmp
-
-echo "test2" >> /tmp/file01.txt
-cat /tmp/file01.txt
-echo "test3" > /tmp/file01.txt
-cat /tmp/file01.txt
-rm /tmp/fileOl.txt
-
-su -
-chmod +t /tmp
-cat /tmp/file01.txt
-exit
-ls -l / | grep tmp
-```
-
-![Исследование Sticky (2)](images/08.png){#fig:008 width=86%}
+![Просмотр http://127.0.0.1/test.html (3)](images/15.png){#fig:015 width=86%}
 
 # Анализ результатов
 
@@ -281,7 +221,7 @@ ls -l / | grep tmp
 
 # Выводы
 
-Изучены идентификаторы SetUID-биты и Sticky-биты. Опробовали их действие на практике. Изучили влияние бита Sticky. Повысили свои навыки использования интерфейса командой строки (CLI).
+Нам удалось развить навыки администрирования ОС Linux. Получить первое практическое знакомство с технологией SELinux. Проверить работу SELinx на практике совместно с веб-сервером Apache. Такде мы настроили и запустили сервер Apache. Исследовали влияние различных параметров на работу сервера.
 
 # Список литературы{.unnumbered}
 
