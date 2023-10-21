@@ -15,7 +15,7 @@ csl: pandoc/csl/gost-r-7-0-5-2008-numeric.csl
 ## Pdf output format
 toc: true # Table of contents
 toc-depth: 2
-lof: true # List of figures
+lof: false # List of figures
 lot: false # List of tables
 fontsize: 12pt
 linestretch: 1.5
