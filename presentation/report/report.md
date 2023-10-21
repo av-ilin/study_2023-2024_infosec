@@ -158,5 +158,14 @@ header-includes:
 
 # Список литературы{.unnumbered}
 
-::: {#refs}
-:::
+1. БИОМЕТРИЯ В ИНФОРМАЦИОННОЙ БЕЗОПАСНОСТИ [Электронный ресурс]. ВГУ. URL: https://cyberleninka.ru/article/n/biometriya-v-informatsionnoy-bezopasnosti.
+
+2. Биометрическая аутентификация [Электронный ресурс]. URL: https://rt-solar.ru/events/blog/3616/.
+
+3. Проблемы и угрозы биометрической идентификации [Электронный ресурс]. URL: https://habr.com/ru/companies/trendmicro/articles/469533/.
+
+4. Аутентификация [Электронный ресурс]. URL: https://cisoclub.ru/autentifikacija/.
+
+5. Нейросетевые технологии биометрической аутентификации пользователей открытых систем [Электронный ресурс]. URL: https://www.dissercat.com/content/neirosetevye-tekhnologii-biometricheskoi-autentifikatsii-polzovatelei-otkrytykh-sistem.
+
+6. ИСПОЛЬЗОВАНИЕ БИОМЕТРИИ В ИНФОРМАЦИОННОЙ БЕЗОПАСНОСТИ [Электронный ресурс]. URL: https://web.snauka.ru/issues/2023/09/100808.
